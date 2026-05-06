@@ -51,7 +51,11 @@ export default function ChatWindow({ chat, currentUser, onBack }) {
         createdAt: serverTimestamp(),
       })
       await updateDoc(doc(db, 'chats', chat.id), {
-        lastMessage: { text: trimmed, senderId: currentUser.uid },
+        lastMessage: {
+          text: trimmed,
+          senderId: currentUser.uid,
+          senderName: currentUser.displayName || currentUser.email.split('@')[0],
+        },
         updatedAt: serverTimestamp(),
       })
     } finally {
@@ -66,6 +70,7 @@ export default function ChatWindow({ chat, currentUser, onBack }) {
   }
 
   const displayName = chat.displayName || 'Чат'
+  const isGroup = chat.type === 'group'
   const initial = displayName[0]?.toUpperCase()
 
   return (
@@ -81,15 +86,22 @@ export default function ChatWindow({ chat, currentUser, onBack }) {
           </svg>
         </button>
 
-        <div className="w-10 h-10 rounded-full bg-[#6c757d] flex items-center justify-center text-white font-semibold flex-shrink-0">
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0 ${isGroup ? 'bg-[#7c4dff]' : 'bg-[#6c757d]'}`}>
           {chat.photoURL ? (
             <img src={chat.photoURL} className="w-10 h-10 rounded-full object-cover" alt="" />
+          ) : isGroup ? (
+            <svg viewBox="0 0 24 24" className="w-5 h-5 fill-white">
+              <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+            </svg>
           ) : (
             initial
           )}
         </div>
         <div>
           <p className="text-white text-sm font-medium">{displayName}</p>
+          {isGroup && chat.members && (
+            <p className="text-[#8696a0] text-xs">{chat.members.length} участника</p>
+          )}
         </div>
       </div>
 
@@ -117,7 +129,7 @@ export default function ChatWindow({ chat, currentUser, onBack }) {
               const isMe = msg.senderId === currentUser.uid
               const showName =
                 !isMe &&
-                (mi === 0 || group.messages[mi - 1]?.senderId !== msg.senderId)
+                (isGroup || mi === 0 || group.messages[mi - 1]?.senderId !== msg.senderId)
 
               return (
                 <div

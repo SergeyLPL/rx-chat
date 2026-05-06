@@ -11,13 +11,15 @@ import {
   serverTimestamp,
 } from 'firebase/firestore'
 import { auth, db } from '../firebase'
+import CreateGroup from './CreateGroup'
 
 export default function Sidebar({ currentUser, activeChat, onSelectChat }) {
   const [chats, setChats] = useState([])
   const [allUsers, setAllUsers] = useState([])
-  const [tab, setTab] = useState('chats') // 'chats' | 'users'
+  const [tab, setTab] = useState('chats')
   const [search, setSearch] = useState('')
   const [showMenu, setShowMenu] = useState(false)
+  const [showCreateGroup, setShowCreateGroup] = useState(false)
 
   useEffect(() => {
     const q = query(
@@ -27,11 +29,7 @@ export default function Sidebar({ currentUser, activeChat, onSelectChat }) {
     const unsub = onSnapshot(q, (snap) => {
       const list = snap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => {
-          const ta = a.updatedAt?.seconds ?? 0
-          const tb = b.updatedAt?.seconds ?? 0
-          return tb - ta
-        })
+        .sort((a, b) => (b.updatedAt?.seconds ?? 0) - (a.updatedAt?.seconds ?? 0))
       setChats(list)
     })
     return unsub
@@ -39,12 +37,9 @@ export default function Sidebar({ currentUser, activeChat, onSelectChat }) {
 
   useEffect(() => {
     if (tab !== 'users') return
-    const q = query(collection(db, 'users'))
-    getDocs(q).then((snap) => {
+    getDocs(collection(db, 'users')).then((snap) => {
       setAllUsers(
-        snap.docs
-          .map((d) => d.data())
-          .filter((u) => u.uid !== currentUser.uid)
+        snap.docs.map((d) => d.data()).filter((u) => u.uid !== currentUser.uid)
       )
     })
   }, [tab, currentUser.uid])
@@ -58,6 +53,12 @@ export default function Sidebar({ currentUser, activeChat, onSelectChat }) {
 
   const displayName = currentUser.displayName || currentUser.email?.split('@')[0] || 'Вы'
   const initial = displayName[0]?.toUpperCase()
+
+  function handleGroupCreated(chat) {
+    setShowCreateGroup(false)
+    onSelectChat(chat)
+    setTab('chats')
+  }
 
   return (
     <div className="flex flex-col h-full bg-[#111b21] border-r border-[#2a3942] w-full">
@@ -73,25 +74,38 @@ export default function Sidebar({ currentUser, activeChat, onSelectChat }) {
           )}
           <span className="text-white text-sm font-medium">{displayName}</span>
         </div>
-        <div className="relative">
+        <div className="flex items-center gap-1">
+          {/* New group button */}
           <button
-            onClick={() => setShowMenu(!showMenu)}
+            onClick={() => setShowCreateGroup(true)}
+            title="Создать группу"
             className="text-[#8696a0] hover:text-white p-2 rounded-full hover:bg-[#374045] transition-colors"
           >
             <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
-              <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+              <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
             </svg>
           </button>
-          {showMenu && (
-            <div className="absolute right-0 top-10 bg-[#233138] rounded-lg shadow-xl py-1 w-44 z-10">
-              <button
-                onClick={() => { signOut(auth); setShowMenu(false) }}
-                className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-[#374045] transition-colors"
-              >
-                Выйти
-              </button>
-            </div>
-          )}
+          {/* Menu */}
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="text-[#8696a0] hover:text-white p-2 rounded-full hover:bg-[#374045] transition-colors"
+            >
+              <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
+                <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+              </svg>
+            </button>
+            {showMenu && (
+              <div className="absolute right-0 top-10 bg-[#233138] rounded-lg shadow-xl py-1 w-44 z-10">
+                <button
+                  onClick={() => { signOut(auth); setShowMenu(false) }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-[#374045] transition-colors"
+                >
+                  Выйти
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -135,7 +149,12 @@ export default function Sidebar({ currentUser, activeChat, onSelectChat }) {
             {filteredChats.length === 0 ? (
               <div className="text-center text-[#8696a0] text-sm mt-12 px-4">
                 <p>Нет чатов</p>
-                <p className="text-xs mt-1">Перейдите во вкладку «Пользователи» чтобы начать диалог</p>
+                <p className="text-xs mt-1">
+                  Перейдите во вкладку «Пользователи» или нажмите{' '}
+                  <button onClick={() => setShowCreateGroup(true)} className="text-[#00a884] hover:underline">
+                    создать группу
+                  </button>
+                </p>
               </div>
             ) : (
               filteredChats.map((chat) => (
@@ -169,12 +188,22 @@ export default function Sidebar({ currentUser, activeChat, onSelectChat }) {
           </>
         )}
       </div>
+
+      {/* Create group modal */}
+      {showCreateGroup && (
+        <CreateGroup
+          currentUser={currentUser}
+          onCreated={handleGroupCreated}
+          onClose={() => setShowCreateGroup(false)}
+        />
+      )}
     </div>
   )
 }
 
 function ChatRow({ chat, currentUid, isActive, onClick }) {
   const name = chat.displayName || 'Чат'
+  const isGroup = chat.type === 'group'
   const initial = name[0]?.toUpperCase()
   const time = chat.updatedAt?.toDate
     ? formatTime(chat.updatedAt.toDate())
@@ -187,21 +216,38 @@ function ChatRow({ chat, currentUid, isActive, onClick }) {
         isActive ? 'bg-[#2a3942]' : ''
       }`}
     >
-      <div className="w-12 h-12 rounded-full bg-[#6c757d] flex items-center justify-center text-white font-semibold flex-shrink-0 text-lg">
+      {/* Avatar */}
+      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0 text-lg ${isGroup ? 'bg-[#7c4dff]' : 'bg-[#6c757d]'}`}>
         {chat.photoURL ? (
           <img src={chat.photoURL} className="w-12 h-12 rounded-full object-cover" alt="" />
+        ) : isGroup ? (
+          <svg viewBox="0 0 24 24" className="w-6 h-6 fill-white">
+            <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+          </svg>
         ) : (
           initial
         )}
       </div>
+
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
-          <span className="text-white text-sm font-medium truncate">{name}</span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-white text-sm font-medium truncate">{name}</span>
+            {isGroup && (
+              <span className="text-[#7c4dff] text-xs flex-shrink-0">
+                · {chat.members?.length ?? 0}
+              </span>
+            )}
+          </div>
           {time && <span className="text-[#8696a0] text-xs flex-shrink-0 ml-2">{time}</span>}
         </div>
         {chat.lastMessage && (
           <p className="text-[#8696a0] text-xs truncate mt-0.5">
-            {chat.lastMessage.senderId === currentUid ? 'Вы: ' : ''}
+            {chat.lastMessage.senderId === currentUid
+              ? 'Вы: '
+              : isGroup && chat.lastMessage.senderName
+              ? `${chat.lastMessage.senderName}: `
+              : ''}
             {chat.lastMessage.text}
           </p>
         )}
@@ -223,6 +269,7 @@ function UserRow({ user, currentUser, isActive, onSelect }) {
       await setDoc(
         chatRef,
         {
+          type: 'direct',
           members: [currentUser.uid, user.uid],
           displayName,
           photoURL: user.photoURL || null,
@@ -232,7 +279,7 @@ function UserRow({ user, currentUser, isActive, onSelect }) {
         },
         { merge: true }
       )
-      onSelect({ id: chatId, otherUid: user.uid, displayName, photoURL: user.photoURL || null })
+      onSelect({ id: chatId, type: 'direct', otherUid: user.uid, displayName, photoURL: user.photoURL || null })
     } catch (err) {
       console.error('Ошибка открытия чата:', err)
     } finally {
@@ -251,9 +298,7 @@ function UserRow({ user, currentUser, isActive, onSelect }) {
       <div className="w-12 h-12 rounded-full bg-[#6c757d] flex items-center justify-center text-white font-semibold flex-shrink-0 text-lg">
         {user.photoURL ? (
           <img src={user.photoURL} className="w-12 h-12 rounded-full object-cover" alt="" />
-        ) : (
-          initial
-        )}
+        ) : initial}
       </div>
       <div className="flex-1 min-w-0">
         <span className="text-white text-sm font-medium block truncate">
@@ -267,8 +312,7 @@ function UserRow({ user, currentUser, isActive, onSelect }) {
 
 function formatTime(date) {
   const now = new Date()
-  const diff = now - date
-  if (diff < 86400000) {
+  if (now - date < 86400000) {
     return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
   }
   return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
