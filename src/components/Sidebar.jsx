@@ -5,10 +5,8 @@ import {
   query,
   where,
   onSnapshot,
-  orderBy,
   getDocs,
   doc,
-  getDoc,
   setDoc,
   serverTimestamp,
 } from 'firebase/firestore'
@@ -24,11 +22,17 @@ export default function Sidebar({ currentUser, activeChat, onSelectChat }) {
   useEffect(() => {
     const q = query(
       collection(db, 'chats'),
-      where('members', 'array-contains', currentUser.uid),
-      orderBy('updatedAt', 'desc')
+      where('members', 'array-contains', currentUser.uid)
     )
     const unsub = onSnapshot(q, (snap) => {
-      setChats(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      const list = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => {
+          const ta = a.updatedAt?.seconds ?? 0
+          const tb = b.updatedAt?.seconds ?? 0
+          return tb - ta
+        })
+      setChats(list)
     })
     return unsub
   }, [currentUser.uid])
@@ -212,22 +216,28 @@ function UserRow({ user, currentUser, isActive, onSelect }) {
 
   async function openChat() {
     setLoading(true)
-    const chatId = [currentUser.uid, user.uid].sort().join('_')
-    const chatRef = doc(db, 'chats', chatId)
-    const snap = await getDoc(chatRef)
-    if (!snap.exists()) {
-      await setDoc(chatRef, {
-        members: [currentUser.uid, user.uid],
-        displayName: user.displayName || user.email.split('@')[0],
-        photoURL: user.photoURL || null,
-        otherUid: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        lastMessage: null,
-      })
+    try {
+      const chatId = [currentUser.uid, user.uid].sort().join('_')
+      const chatRef = doc(db, 'chats', chatId)
+      const displayName = user.displayName || user.email.split('@')[0]
+      await setDoc(
+        chatRef,
+        {
+          members: [currentUser.uid, user.uid],
+          displayName,
+          photoURL: user.photoURL || null,
+          otherUid: user.uid,
+          updatedAt: serverTimestamp(),
+          lastMessage: null,
+        },
+        { merge: true }
+      )
+      onSelect({ id: chatId, otherUid: user.uid, displayName, photoURL: user.photoURL || null })
+    } catch (err) {
+      console.error('Ошибка открытия чата:', err)
+    } finally {
+      setLoading(false)
     }
-    onSelect({ id: chatId, otherUid: user.uid, displayName: user.displayName, ...snap.data() })
-    setLoading(false)
   }
 
   return (
